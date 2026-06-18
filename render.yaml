@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: stim-mini-app
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: INITIAL_ADMIN_USERNAME
+        sync: false
+      - key: INITIAL_ADMIN_PASSWORD
+        sync: false
+      - key: INITIAL_ADMIN_FULL_NAME
+        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: stim-postgres
+          property: connectionString
+
+databases:
+  - name: stim-postgres
+    plan: free

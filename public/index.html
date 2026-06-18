@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>STIMUL — mini app users</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div id="loginScreen" class="login-screen">
+    <form id="loginForm" class="login-card card">
+      <p class="eyebrow">STIMUL</p>
+      <h1>Вход в систему</h1>
+      <p class="muted">Десятый комплект: пользователи в БД, bcrypt-хеширование, управление аккаунтами.</p>
+      <label><span>Логин</span><input id="loginUsername" type="text" value="admin" required /></label>
+      <label><span>Пароль</span><input id="loginPassword" type="password" value="admin123" required /></label>
+      <button type="submit">Войти</button>
+      <pre id="loginStatus">Первый администратор берётся из .env и создаётся в app_users автоматически.</pre>
+    </form>
+  </div>
+
+  <main id="appRoot" class="app-shell" style="display:none;">
+    <aside class="sidebar">
+      <div>
+        <p class="eyebrow">STIMUL</p>
+        <h1>Mini App Users</h1>
+        <p class="sidebar-text">Постоянные аккаунты в БД, роли admin/editor/viewer и журнал действий.</p>
+        <div class="user-badge">
+          <strong id="currentUserName">—</strong>
+          <span id="currentUserRole">—</span>
+        </div>
+      </div>
+      <nav class="nav">
+        <button class="nav-btn active" data-view="dashboard">Главная</button>
+        <button class="nav-btn" data-view="results">Результаты</button>
+        <button class="nav-btn" data-view="summary">Сводка</button>
+        <button class="nav-btn" data-view="teacher">Карточка педагога</button>
+        <button class="nav-btn" data-view="audit">Журнал</button>
+        <button class="nav-btn" data-view="users">Пользователи</button>
+        <button class="nav-btn danger-nav" id="logoutBtn">Выйти</button>
+      </nav>
+    </aside>
+
+    <section class="content">
+      <header class="topbar card">
+        <div>
+          <h2 id="pageTitle">Главная</h2>
+          <p class="muted">Период: <span id="periodName">—</span></p>
+        </div>
+        <div class="top-actions">
+          <button class="secondary" id="checkHealthBtn">Проверить БД</button>
+          <button id="recalculateBtn">Пересчитать сводку</button>
+        </div>
+      </header>
+
+      <section id="dashboardView" class="view active-view">
+        <div class="stats-grid six-cols">
+          <article class="card stat-card"><span>Ученики</span><strong id="studentsCount">—</strong></article>
+          <article class="card stat-card"><span>Педагоги</span><strong id="teachersCount">—</strong></article>
+          <article class="card stat-card"><span>Результаты</span><strong id="resultsCount">—</strong></article>
+          <article class="card stat-card"><span>Расчёты</span><strong id="calculationsCount">—</strong></article>
+          <article class="card stat-card"><span>События audit</span><strong id="auditCount">—</strong></article>
+          <article class="card stat-card"><span>Пользователи</span><strong id="usersCount">—</strong></article>
+        </div>
+        <article class="card"><h3>Статус системы</h3><pre id="statusBox">Ожидание входа...</pre></article>
+      </section>
+
+      <section id="resultsView" class="view">
+        <div class="grid results-layout">
+          <article class="card form-card">
+            <div class="card-head"><h3 id="formTitle">Новый результат</h3><button class="secondary" id="resetFormBtn">Сбросить</button></div>
+            <form id="resultForm" class="form-grid">
+              <input type="hidden" id="resultId" />
+              <label><span>Ученик</span><select id="studentId" required></select></label>
+              <label><span>Критерий</span><select id="criterionId" required></select></label>
+              <label><span>Класс</span><select id="gradeAtResult" required><option value="">Выберите класс</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option></select></label>
+              <label><span>Трек</span><select id="gradeTrack" required></select></label>
+              <label><span>Доп. балл за динамику</span><input id="dynamicBonus" type="number" min="0" step="0.01" value="0" /></label>
+              <label><span>Сырой результат</span><input id="rawResultValue" type="text" placeholder="например: 84 / Высокий / 5" /></label>
+              <label><span>Дата результата</span><input id="resultDate" type="date" /></label>
+              <label><span>Комментарий</span><input id="comment" type="text" placeholder="необязательно" /></label>
+              <div class="form-actions"><button type="submit" id="submitBtn">Сохранить результат</button></div>
+            </form>
+            <pre id="formStatus">Войдите и загрузите справочники.</pre>
+          </article>
+
+          <article class="card list-card">
+            <div class="card-head stacked">
+              <div><h3>Список результатов</h3><p class="muted">Поиск, фильтры, роли и экспорт XLSX.</p></div>
+              <div class="toolbar">
+                <input id="resultsSearch" type="search" placeholder="Поиск по ученику или критерию" />
+                <select id="resultsTrackFilter"><option value="">Все треки</option><option value="regular">Обычный</option><option value="course">11 класс (курс)</option><option value="practicum">11 класс (практикум)</option></select>
+                <select id="resultsGradeFilter"><option value="">Все классы</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option></select>
+                <button class="secondary" id="loadResultsBtn">Обновить</button>
+                <a class="button-link" href="/api/results/export.xlsx" target="_blank" rel="noopener noreferrer">Экспорт XLSX</a>
+              </div>
+            </div>
+            <div id="resultsMeta" class="meta-line muted">Загрузка...</div>
+            <div id="resultsTable" class="table-wrap"><p class="muted">Загрузка...</p></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="summaryView" class="view">
+        <div class="grid summary-layout">
+          <article class="card">
+            <div class="card-head stacked">
+              <div><h3>Текущая summary view</h3><p class="muted">Поиск, фильтр и экспорт XLSX.</p></div>
+              <div class="toolbar">
+                <input id="summarySearch" type="search" placeholder="Поиск по педагогу" />
+                <label class="checkbox-inline"><input id="hideDismissed" type="checkbox" /><span>Скрыть уволенных</span></label>
+                <button class="secondary" id="loadSummaryBtn">Обновить summary</button>
+                <a class="button-link" href="/api/summary/export.xlsx" target="_blank" rel="noopener noreferrer">Экспорт XLSX</a>
+              </div>
+            </div>
+            <div id="summaryMeta" class="meta-line muted">Загрузка...</div>
+            <div id="summaryTable" class="table-wrap"><p class="muted">Загрузка...</p></div>
+          </article>
+
+          <article class="card">
+            <div class="card-head stacked">
+              <div><h3>Сохранённые teacher_calculations</h3><p class="muted">Выберите педагога и откройте карточку.</p></div>
+              <div class="toolbar">
+                <input id="savedSearch" type="search" placeholder="Поиск по педагогу" />
+                <button class="secondary" id="loadSavedBtn">Обновить сохранённые</button>
+              </div>
+            </div>
+            <div id="savedMeta" class="meta-line muted">Загрузка...</div>
+            <div id="savedTable" class="table-wrap"><p class="muted">Загрузка...</p></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="teacherView" class="view">
+        <div class="grid teacher-layout">
+          <article class="card">
+            <div class="card-head stacked">
+              <div><h3>Карточка педагога</h3><p class="muted">XLSX-экспорт и печать карточки.</p></div>
+              <div class="toolbar">
+                <select id="teacherSelect"><option value="">Выберите педагога</option></select>
+                <button class="secondary" id="loadTeacherCardBtn">Открыть карточку</button>
+              </div>
+            </div>
+            <div id="teacherCardMeta" class="meta-line muted">Карточка ещё не загружена.</div>
+            <div id="teacherCardBox" class="teacher-card-grid">
+              <div class="card inset-card"><h4>Summary view</h4><div id="teacherSummaryInfo" class="info-list muted">Нет данных</div></div>
+              <div class="card inset-card"><h4>Последний расчёт</h4><div id="teacherCalcInfo" class="info-list muted">Нет данных</div></div>
+            </div>
+          </article>
+          <article class="card">
+            <div class="card-head"><h3>Последние результаты педагога</h3></div>
+            <div id="teacherItemsTable" class="table-wrap"><p class="muted">Выберите педагога, чтобы увидеть связанные результаты.</p></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="auditView" class="view">
+        <article class="card">
+          <div class="card-head stacked">
+            <div><h3>Журнал изменений</h3><p class="muted">Логины, пересчёты, CRUD по результатам и действия с пользователями.</p></div>
+            <div class="toolbar"><button class="secondary" id="loadAuditBtn">Обновить журнал</button></div>
+          </div>
+          <div id="auditMeta" class="meta-line muted">Загрузка...</div>
+          <div id="auditTable" class="table-wrap"><p class="muted">Загрузка...</p></div>
+        </article>
+      </section>
+
+      <section id="usersView" class="view">
+        <div class="grid results-layout">
+          <article class="card form-card">
+            <div class="card-head"><h3 id="userFormTitle">Новый пользователь</h3><button class="secondary" id="resetUserFormBtn">Сбросить</button></div>
+            <form id="userForm" class="form-grid">
+              <input type="hidden" id="userId" />
+              <label><span>Логин</span><input id="userUsername" type="text" required /></label>
+              <label><span>ФИО</span><input id="userFullName" type="text" required /></label>
+              <label><span>Роль</span><select id="userRole" required><option value="admin">admin</option><option value="editor">editor</option><option value="viewer">viewer</option></select></label>
+              <label><span>Пароль</span><input id="userPassword" type="password" placeholder="для нового пользователя обязателен" /></label>
+              <label><span>Статус</span><select id="userIsActive"><option value="true">Активен</option><option value="false">Отключён</option></select></label>
+              <div class="form-actions"><button type="submit" id="userSubmitBtn">Сохранить пользователя</button></div>
+            </form>
+            <pre id="userFormStatus">Раздел доступен только admin.</pre>
+          </article>
+
+          <article class="card list-card">
+            <div class="card-head stacked">
+              <div><h3>Пользователи системы</h3><p class="muted">Создание, редактирование, деактивация и удаление аккаунтов.</p></div>
+              <div class="toolbar">
+                <button class="secondary" id="loadUsersBtn">Обновить пользователей</button>
+              </div>
+            </div>
+            <div id="usersMeta" class="meta-line muted">Загрузка...</div>
+            <div id="usersTable" class="table-wrap"><p class="muted">Загрузка...</p></div>
+          </article>
+        </div>
+      </section>
+    </section>
+  </main>
+  <script src="./app.js"></script>
+</body>
+</html>
