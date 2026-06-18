@@ -735,3 +735,6 @@ LEFT JOIN settings s ON s.academic_period_id = rp.academic_period_id
 ORDER BY ap.name, t.full_name;
 
 COMMIT;
+
+
+-- V2 NOTE: refresh academic period to 2025–2027 and update criteria scores from STIMUL-MO-IIa-POPYTKA-2025-2027.xlsx

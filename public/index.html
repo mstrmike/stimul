@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>STIMUL — mini app users</title>
+  <title>STIMUL — deploy ready v2</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
@@ -71,7 +71,7 @@
             <div class="card-head"><h3 id="formTitle">Новый результат</h3><button class="secondary" id="resetFormBtn">Сбросить</button></div>
             <form id="resultForm" class="form-grid">
               <input type="hidden" id="resultId" />
-              <label><span>Ученик</span><select id="studentId" required></select></label>
+              <label><span>Фамилия и имя ребёнка</span><input id="studentName" type="text" placeholder="Например: Иванов Иван" required /></label>
               <label><span>Критерий</span><select id="criterionId" required></select></label>
               <label><span>Класс</span><select id="gradeAtResult" required><option value="">Выберите класс</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option></select></label>
               <label><span>Трек</span><select id="gradeTrack" required></select></label>
@@ -88,7 +88,7 @@
             <div class="card-head stacked">
               <div><h3>Список результатов</h3><p class="muted">Поиск, фильтры, роли и экспорт XLSX.</p></div>
               <div class="toolbar">
-                <input id="resultsSearch" type="search" placeholder="Поиск по ученику или критерию" />
+                <input id="resultsSearch" type="search" placeholder="Поиск по ученику, критерию или ФИ" />
                 <select id="resultsTrackFilter"><option value="">Все треки</option><option value="regular">Обычный</option><option value="course">11 класс (курс)</option><option value="practicum">11 класс (практикум)</option></select>
                 <select id="resultsGradeFilter"><option value="">Все классы</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option></select>
                 <button class="secondary" id="loadResultsBtn">Обновить</button>
@@ -178,7 +178,7 @@
               <label><span>Статус</span><select id="userIsActive"><option value="true">Активен</option><option value="false">Отключён</option></select></label>
               <div class="form-actions"><button type="submit" id="userSubmitBtn">Сохранить пользователя</button></div>
             </form>
-            <pre id="userFormStatus">Раздел доступен только admin.</pre>
+            <pre id="userFormStatus">Раздел доступен только admin. Редактирование пользователей исправлено в v2.</pre>
           </article>
 
           <article class="card list-card">

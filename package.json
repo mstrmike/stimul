@@ -1,7 +1,7 @@
 {
-  "name": "stim-mini-app-users",
+  "name": "stim-deploy-ready-v2",
   "version": "1.0.0",
-  "description": "Unified STIMUL mini app with DB users, password hashing and account management",
+  "description": "STIMUL deploy-ready v2 with updated criteria period, manual student entry, fixed user edit, raw-only summary",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

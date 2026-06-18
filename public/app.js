@@ -37,7 +37,7 @@ const calculationsCount = document.getElementById('calculationsCount');
 const auditCount = document.getElementById('auditCount');
 const usersCount = document.getElementById('usersCount');
 const resultId = document.getElementById('resultId');
-const studentId = document.getElementById('studentId');
+const studentName = document.getElementById('studentName');
 const criterionId = document.getElementById('criterionId');
 const gradeAtResult = document.getElementById('gradeAtResult');
 const gradeTrack = document.getElementById('gradeTrack');
@@ -119,7 +119,7 @@ function applyRoleUi() {
 }
 function fillForm(row) {
   resultId.value = row.id;
-  studentId.value = row.student_id;
+  studentName.value = row.student_name;
   criterionId.value = row.criterion_id;
   gradeAtResult.value = row.grade_at_result;
   gradeTrack.value = row.grade_track;
@@ -184,7 +184,6 @@ async function loadOptions() {
   try {
     const data = await fetchJson('/api/form-options');
     periodName.textContent = data.period.name;
-    setSelectOptions(studentId, data.students, (item) => `<option value="${item.id}">${item.full_name}</option>`, 'Выберите ученика');
     setSelectOptions(criterionId, data.criteria, (item) => `<option value="${item.id}">${item.name} (база: ${item.base_score})</option>`, 'Выберите критерий');
     setSelectOptions(gradeTrack, data.gradeTracks, (item) => `<option value="${item.value}">${item.label}</option>`, 'Выберите трек');
   } catch (error) { formStatus.textContent = error.message; }
@@ -204,7 +203,7 @@ function renderSummaryTable() {
   const filtered = summaryCache.filter((row) => (!q || row.teacher_name.toLowerCase().includes(q)) && (!hideDismissed.checked || !row.is_dismissed));
   summaryMeta.textContent = `Показано ${filtered.length} из ${summaryCache.length}`;
   if (!filtered.length) return summaryTable.innerHTML = '<p class="muted">Ничего не найдено</p>';
-  summaryTable.innerHTML = `<table><thead><tr><th>Педагог</th><th>С баллами</th><th>Всего</th><th>Raw</th><th>Normalized</th><th>Normalized fund</th><th>Открыть</th></tr></thead><tbody>${filtered.map((row) => `<tr><td>${row.teacher_name}</td><td>${formatNumber(row.student_count_with_results)}</td><td>${formatNumber(row.total_student_count)}</td><td>${formatNumber(row.raw_points)}</td><td>${formatNumber(row.normalized_points)}</td><td>${formatNumber(row.normalized_fund_amount)}</td><td><button class="secondary" data-open-teacher="${encodeURIComponent(row.teacher_name)}">Карточка</button></td></tr>`).join('')}</tbody></table>`;
+  summaryTable.innerHTML = `<table><thead><tr><th>Педагог</th><th>С баллами</th><th>Всего</th><th>Raw</th><th>Сумма уволившихся</th><th>Обратный вес</th><th>Итог</th><th>Открыть</th></tr></thead><tbody>${filtered.map((row) => `<tr><td>${row.teacher_name}</td><td>${formatNumber(row.student_count_with_results)}</td><td>${formatNumber(row.total_student_count)}</td><td>${formatNumber(row.raw_points)}</td><td>${formatNumber(row.dismissed_fund)}</td><td>${formatNumber(row.reverse_weight)}</td><td>${formatNumber(row.final_amount)}</td><td><button class="secondary" data-open-teacher="${encodeURIComponent(row.teacher_name)}">Карточка</button></td></tr>`).join('')}</tbody></table>`;
 }
 function renderSavedTable() {
   const q = savedSearch.value.trim().toLowerCase();
@@ -212,7 +211,7 @@ function renderSavedTable() {
   savedMeta.textContent = `Показано ${filtered.length} из ${savedCache.length}`;
   setSelectOptions(teacherSelect, filtered, (item) => `<option value="${item.teacher_name}">${item.teacher_name}</option>`, 'Выберите педагога');
   if (!filtered.length) return savedTable.innerHTML = '<p class="muted">Ничего не найдено</p>';
-  savedTable.innerHTML = `<table><thead><tr><th>Педагог</th><th>Raw</th><th>Normalized</th><th>UvSotr</th><th>Final amount</th><th>Дата расчёта</th><th>Открыть</th></tr></thead><tbody>${filtered.map((row) => `<tr><td>${row.teacher_name}</td><td>${formatNumber(row.raw_points)}</td><td>${formatNumber(row.normalized_points)}</td><td>${formatNumber(row.uvsotr_amount)}</td><td>${formatNumber(row.final_amount)}</td><td>${row.calculated_at || '—'}</td><td><button class="secondary" data-open-teacher="${encodeURIComponent(row.teacher_name)}">Карточка</button></td></tr>`).join('')}</tbody></table>`;
+  savedTable.innerHTML = `<table><thead><tr><th>Педагог</th><th>Raw</th><th>Обратный вес</th><th>UvSotr</th><th>Final amount</th><th>Дата расчёта</th><th>Открыть</th></tr></thead><tbody>${filtered.map((row) => `<tr><td>${row.teacher_name}</td><td>${formatNumber(row.raw_points)}</td><td>${formatNumber(row.reverse_weight)}</td><td>${formatNumber(row.uvsotr_amount)}</td><td>${formatNumber(row.final_amount)}</td><td>${row.calculated_at || '—'}</td><td><button class="secondary" data-open-teacher="${encodeURIComponent(row.teacher_name)}">Карточка</button></td></tr>`).join('')}</tbody></table>`;
 }
 function renderAuditTable() {
   auditMeta.textContent = `Показано ${auditCache.length} событий`;
@@ -236,7 +235,7 @@ async function loadTeacherCard(teacherName) {
     showView('teacher');
     teacherSelect.value = teacherName;
     teacherCardMeta.innerHTML = `Карточка педагога: ${teacherName} <span class="teacher-card-actions"><button class="secondary" id="printTeacherBtn">Печать карточки</button> <a class="button-link" href="/api/teacher-card/${encodeURIComponent(teacherName)}/export.xlsx" target="_blank" rel="noopener noreferrer">Экспорт XLSX</a></span>`;
-    teacherSummaryInfo.innerHTML = data.summary ? `<p><strong>С баллами:</strong> ${formatNumber(data.summary.student_count_with_results)}</p><p><strong>Всего учеников:</strong> ${formatNumber(data.summary.total_student_count)}</p><p><strong>Raw points:</strong> ${formatNumber(data.summary.raw_points)}</p><p><strong>Normalized points:</strong> ${formatNumber(data.summary.normalized_points)}</p><p><strong>Normalized fund:</strong> ${formatNumber(data.summary.normalized_fund_amount)}</p><p><strong>Уволен:</strong> ${data.summary.is_dismissed ? 'Да' : 'Нет'}</p>` : '<p class="muted">Нет данных summary view</p>';
+    teacherSummaryInfo.innerHTML = data.summary ? `<p><strong>С баллами:</strong> ${formatNumber(data.summary.student_count_with_results)}</p><p><strong>Всего учеников:</strong> ${formatNumber(data.summary.total_student_count)}</p><p><strong>Raw points:</strong> ${formatNumber(data.summary.raw_points)}</p><p><strong>Сумма уволившихся:</strong> ${formatNumber(data.summary.dismissed_fund)}</p><p><strong>Обратный вес:</strong> ${formatNumber(data.summary.reverse_weight)}</p><p><strong>Итог:</strong> ${formatNumber(data.summary.final_amount)}</p><p><strong>Уволен:</strong> ${data.summary.is_dismissed ? 'Да' : 'Нет'}</p>` : '<p class="muted">Нет данных summary view</p>';
     teacherCalcInfo.innerHTML = data.calculation ? `<p><strong>Raw:</strong> ${formatNumber(data.calculation.raw_points)}</p><p><strong>Normalized:</strong> ${formatNumber(data.calculation.normalized_points)}</p><p><strong>UvSotr:</strong> ${formatNumber(data.calculation.uvsotr_amount)}</p><p><strong>Final amount:</strong> ${formatNumber(data.calculation.final_amount)}</p><p><strong>Дата расчёта:</strong> ${data.calculation.calculated_at || '—'}</p>` : '<p class="muted">Нет сохранённого расчёта</p>';
     teacherItemsTable.innerHTML = data.items.length ? `<table><thead><tr><th>Ученик</th><th>Критерий</th><th>Итоговый балл</th><th>Дата</th></tr></thead><tbody>${data.items.map((row) => `<tr><td>${row.student_name}</td><td>${row.criterion_name}</td><td>${formatNumber(row.total_score)}</td><td>${row.result_date || '—'}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Нет связанных результатов</p>';
     document.getElementById('printTeacherBtn').addEventListener('click', () => window.print());

@@ -8,7 +8,7 @@ const db = require('./db');
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
-const PERIOD_NAME = '2024–2026';
+const PERIOD_NAME = '2025–2027';
 const sessions = new Map();
 
 app.use(express.json());
@@ -100,8 +100,76 @@ function sendWorkbook(res, workbook, filename) {
 }
 
 async function payloadFromReq(req) {
-  const { studentId, criterionId, gradeAtResult, gradeTrack, dynamicBonus, rawResultValue, resultDate, comment } = req.body || {};
-  return { studentId, criterionId, gradeAtResult, gradeTrack, dynamicBonus, rawResultValue, resultDate, comment };
+  const { studentId, studentName, criterionId, gradeAtResult, gradeTrack, dynamicBonus, rawResultValue, resultDate, comment } = req.body || {};
+  return { studentId, studentName, criterionId, gradeAtResult, gradeTrack, dynamicBonus, rawResultValue, resultDate, comment };
+}
+
+async function ensureStudentByName(fullName) {
+  const clean = String(fullName || '').replace(/\s+/g, ' ').trim();
+  if (!clean) throw new Error('Нужно указать фамилию и имя ребёнка');
+  const existing = await db.query(`SELECT id, full_name FROM students WHERE LOWER(TRIM(full_name)) = LOWER(TRIM($1)) LIMIT 1`, [clean]);
+  if (existing.rows.length) return existing.rows[0];
+  const created = await db.query(`INSERT INTO students (full_name, is_active) VALUES ($1, TRUE) RETURNING id, full_name`, [clean]);
+  return created.rows[0];
+}
+
+async function getRawSummaryRows(periodName) {
+  const result = await db.query(`
+    WITH base AS (
+      SELECT
+        ap.name AS academic_period,
+        t.id AS teacher_id,
+        t.full_name AS teacher_name,
+        t.short_name AS teacher_short_name,
+        COALESCE(t.is_dismissed, FALSE) AS is_dismissed,
+        COUNT(DISTINCT CASE WHEN srtl.student_result_id IS NOT NULL THEN srtl.student_id END)::int AS student_count_with_results,
+        COUNT(DISTINCT tsl.student_id)::int AS total_student_count,
+        COALESCE(SUM(srtl.total_score), 0)::numeric AS raw_points
+      FROM teachers t
+      JOIN academic_periods ap ON ap.name = $1
+      LEFT JOIN teacher_student_links tsl
+        ON tsl.teacher_id = t.id
+       AND tsl.academic_period_id = ap.id
+      LEFT JOIN student_result_teacher_links srtl
+        ON srtl.teacher_id = t.id
+       AND srtl.academic_period_id = ap.id
+      GROUP BY ap.name, t.id, t.full_name, t.short_name, t.is_dismissed
+    ),
+    active AS (
+      SELECT * FROM base WHERE is_dismissed = FALSE
+    ),
+    dismissed_sum AS (
+      SELECT COALESCE(SUM(raw_points), 0)::numeric AS dismissed_fund FROM base WHERE is_dismissed = TRUE
+    ),
+    weighted AS (
+      SELECT
+        a.*,
+        CASE WHEN a.raw_points > 0 THEN 1.0 / a.raw_points ELSE 0 END::numeric AS reverse_weight
+      FROM active a
+    ),
+    totals AS (
+      SELECT COALESCE(SUM(reverse_weight), 0)::numeric AS sum_weights FROM weighted
+    )
+    SELECT
+      w.academic_period,
+      w.teacher_name,
+      w.teacher_short_name,
+      w.is_dismissed,
+      w.student_count_with_results,
+      w.total_student_count,
+      ROUND(w.raw_points::numeric, 6) AS raw_points,
+      ROUND(ds.dismissed_fund::numeric, 6) AS dismissed_fund,
+      ROUND(w.reverse_weight::numeric, 12) AS reverse_weight,
+      ROUND(t.sum_weights::numeric, 12) AS sum_weights,
+      ROUND(CASE WHEN t.sum_weights > 0 THEN w.reverse_weight / t.sum_weights ELSE 0 END::numeric, 12) AS employee_share,
+      ROUND(CASE WHEN t.sum_weights > 0 THEN ds.dismissed_fund * w.reverse_weight / t.sum_weights ELSE 0 END::numeric, 6) AS reverse_incentive_amount,
+      ROUND((w.raw_points + CASE WHEN t.sum_weights > 0 THEN ds.dismissed_fund * w.reverse_weight / t.sum_weights ELSE 0 END)::numeric, 6) AS final_amount
+    FROM weighted w
+    CROSS JOIN dismissed_sum ds
+    CROSS JOIN totals t
+    ORDER BY w.teacher_name
+  `, [periodName]);
+  return result.rows;
 }
 
 app.post('/api/login', async (req, res) => {
@@ -229,7 +297,10 @@ app.get('/api/form-options', requireAuth, async (req, res) => {
 });
 
 app.get('/api/results', requireAuth, async (req, res) => {
-  try { const result = await db.query(`SELECT sr.id, sr.student_id, sr.criterion_id, s.full_name AS student_name, c.name AS criterion_name, sr.grade_at_result, sr.grade_track, sr.base_score, sr.dynamic_bonus, sr.total_score, sr.raw_result_value, sr.result_date, sr.comment, sr.source_type FROM student_results sr JOIN students s ON s.id = sr.student_id JOIN criteria c ON c.id = sr.criterion_id ORDER BY sr.id DESC LIMIT 300`); res.json({ ok: true, rows: result.rows }); } catch (error) { res.status(500).json({ ok: false, error: error.message }); }
+  try {
+    const result = await db.query(`SELECT sr.id, sr.student_id, sr.criterion_id, s.full_name AS student_name, c.name AS criterion_name, sr.grade_at_result, sr.grade_track, sr.base_score, sr.dynamic_bonus, sr.total_score, sr.raw_result_value, sr.result_date, sr.comment, sr.source_type FROM student_results sr JOIN students s ON s.id = sr.student_id JOIN criteria c ON c.id = sr.criterion_id ORDER BY sr.id DESC LIMIT 500`);
+    res.json({ ok: true, rows: result.rows });
+  } catch (error) { res.status(500).json({ ok: false, error: error.message }); }
 });
 
 app.get('/api/results/export.xlsx', requireAuth, async (req, res) => {
@@ -237,11 +308,11 @@ app.get('/api/results/export.xlsx', requireAuth, async (req, res) => {
 });
 
 app.get('/api/summary', requireAuth, async (req, res) => {
-  try { const result = await db.query(`SELECT academic_period, teacher_name, teacher_short_name, is_dismissed, student_count_with_results, total_student_count, raw_points, normalization_factor, normalized_points, normalized_share_percent, reverse_weight, employee_share, total_fund, dismissed_fund, distributable_fund, uvsotr_value, reverse_incentive_amount, normalized_fund_amount FROM v_teacher_stim_summary ORDER BY teacher_name`); res.json({ ok: true, rows: result.rows }); } catch (error) { res.status(500).json({ ok: false, error: error.message }); }
+  try { const rows = await getRawSummaryRows(PERIOD_NAME); res.json({ ok: true, rows }); } catch (error) { res.status(500).json({ ok: false, error: error.message }); }
 });
 
 app.get('/api/summary/export.xlsx', requireAuth, async (req, res) => {
-  try { const result = await db.query(`SELECT teacher_name AS "Педагог", student_count_with_results AS "С баллами", total_student_count AS "Всего", raw_points AS "Raw points", normalized_points AS "Normalized points", reverse_incentive_amount AS "Reverse incentive", normalized_fund_amount AS "Normalized fund", is_dismissed AS "Уволен" FROM v_teacher_stim_summary ORDER BY teacher_name`); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(result.rows), 'TeacherSummary'); sendWorkbook(res, wb, 'teacher_summary.xlsx'); } catch (error) { res.status(500).json({ ok: false, error: error.message }); }
+  try { const rows = await getRawSummaryRows(PERIOD_NAME); const exportRows = rows.map(r => ({ 'Педагог': r.teacher_name, 'С баллами': r.student_count_with_results, 'Всего': r.total_student_count, 'Raw points': r.raw_points, 'Сумма уволившихся': r.dismissed_fund, 'Обратный вес': r.reverse_weight, 'Доля сотрудника': r.employee_share, 'Сумма по обратному весу': r.reverse_incentive_amount, 'Итог': r.final_amount })); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(exportRows), 'TeacherSummary'); sendWorkbook(res, wb, 'teacher_summary.xlsx'); } catch (error) { res.status(500).json({ ok: false, error: error.message }); }
 });
 
 app.get('/api/teacher-calculations', requireAuth, async (req, res) => {
@@ -289,12 +360,12 @@ app.post('/api/recalculate-summary', requireAdmin, async (req, res) => {
     const academicPeriodId = periodRes.rows[0].id;
     await client.query(`DELETE FROM teacher_calculation_items tci USING teacher_calculations tc WHERE tc.id = tci.teacher_calculation_id AND tc.academic_period_id = $1`, [academicPeriodId]);
     await client.query(`DELETE FROM teacher_calculations WHERE academic_period_id = $1`, [academicPeriodId]);
-    const summaryRes = await client.query(`SELECT teacher_name, raw_points, normalized_points, reverse_weight, employee_share, reverse_incentive_amount, student_count_with_results, total_student_count, normalized_fund_amount, is_dismissed FROM v_teacher_stim_summary WHERE academic_period = $1 ORDER BY teacher_name`, [PERIOD_NAME]);
+    const summaryRes = { rows: await getRawSummaryRows(PERIOD_NAME) };
     let inserted = 0;
     for (const row of summaryRes.rows) {
       const teacherRes = await client.query(`SELECT id FROM teachers WHERE full_name = $1 LIMIT 1`, [row.teacher_name]);
       if (!teacherRes.rows.length) continue;
-      await client.query(`INSERT INTO teacher_calculations (academic_period_id, teacher_id, raw_points, normalized_points, reverse_weight, employee_share, uvsotr_amount, final_amount, student_count_with_results, total_student_count, avg_group_ratio, is_dismissed_snapshot) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NULL, $11)`, [academicPeriodId, teacherRes.rows[0].id, row.raw_points || 0, row.normalized_points || 0, row.reverse_weight || 0, row.employee_share || 0, row.reverse_incentive_amount || 0, row.normalized_fund_amount || 0, row.student_count_with_results || 0, row.total_student_count || 0, row.is_dismissed || false]);
+      await client.query(`INSERT INTO teacher_calculations (academic_period_id, teacher_id, raw_points, normalized_points, reverse_weight, employee_share, uvsotr_amount, final_amount, student_count_with_results, total_student_count, avg_group_ratio, is_dismissed_snapshot) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NULL, $11)`, [academicPeriodId, teacherRes.rows[0].id, row.raw_points || 0, row.raw_points || 0, row.reverse_weight || 0, row.employee_share || 0, row.reverse_incentive_amount || 0, row.final_amount || 0, row.student_count_with_results || 0, row.total_student_count || 0, row.is_dismissed || false]);
       inserted += 1;
     }
     await client.query('COMMIT');

@@ -81,3 +81,11 @@ npm start
 В проекте предполагается, что основная схема предметных таблиц (`students`, `teachers`, `student_results`, `teacher_calculations` и т.д.) уже создана вашей миграцией `migration.sql`.
 
 Если хотите, следующим шагом можно сделать отдельный SQL bootstrap-файл под облачную БД, чтобы развёртывание было полностью автоматическим.
+
+
+## V2 changes
+- Period updated to 2025–2027
+- Manual student name entry in results form
+- User editing fixed in UI and API flow
+- Summary uses raw points + reverse-weight distribution, without normalization
+- Remember to refresh criteria in DB from the new workbook if data already exists
